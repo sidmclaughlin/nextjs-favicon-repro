@@ -1,0 +1,27 @@
+FROM node:18-alpine AS base
+
+FROM base AS deps
+RUN apk add --no-cache libc6-compat
+
+WORKDIR /tmp/build
+COPY package*.json ./
+RUN npm ci
+
+FROM base AS builder
+WORKDIR /tmp/build
+ENV NEXT_TELEMETRY_DISABLED 1
+COPY --from=deps /tmp/build ./
+COPY tsconfig.json ./
+COPY ./ ./
+RUN npm run build
+
+FROM base AS runner
+WORKDIR /www
+ENV NODE_ENV production
+ENV NEXT_TELEMETRY_DISABLED 1
+COPY --from=builder /tmp/build/.next/standalone ./
+COPY --from=builder /tmp/build/public ./public
+COPY --from=builder /tmp/build/.next/static ./.next/static
+
+EXPOSE 3000
+CMD ["node", "./server.js"]
